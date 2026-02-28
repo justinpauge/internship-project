@@ -1,61 +1,85 @@
-from time import sleep
-
+import time
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support import expected_conditions as EC
 from pages.base_page import BasePage
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+
 
 
 class OffPlanPage(BasePage):
-    STATUS_BUTTON = (By.CSS_SELECTOR, '[data-test-id="filter-sale-status-dropdown"]')
+
+    SALE_STATUS_DROPDOWN = (By.CSS_SELECTOR, "[data-test-id='filter-sale-status-dropdown']")
     OUT_OF_STOCK_OPTION = (By.CSS_SELECTOR, '[data-test-id="filter-badge-out_of_stock"]')
+    PRODUCT_STATUSES = (By.CSS_SELECTOR, '[data-test-id="project-card-sale-status"]')
 
-    def assert_opened(self):
-        self.wait_url_contains("find.reelly.io")
+    def __init__(self, driver):
+        super().__init__(driver)
 
-        # Presence is less strict than visibility/clickable
-        try:
-            self.wait_present(self.STATUS_BUTTON)
-        except TimeoutException:
-            raise AssertionError(
-                "On find.reelly.io but status dropdown was not found in DOM.\n"
-                f"URL: {self.driver.current_url}\n"
-                'Expected: [data-test-id="filter-sale-status-dropdown"]'
-            )
-
-    def safe_click(self, locator):
-        el = self.wait_clickable(locator)
-        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-        try:
-            ActionChains(self.driver).move_to_element(el).pause(0.1).click(el).perform()
-        except Exception:
-            self.driver.execute_script("arguments[0].click();", el)
+    def filter_by_out_of_stock(self):
+        time.sleep(2)
+        self.wait.until(EC.presence_of_element_located(self.SALE_STATUS_DROPDOWN))
+        for attempt in range(3):
+            try:
+                elements = self.driver.find_elements(*self.SALE_STATUS_DROPDOWN)
+                for el in elements:
+                    if el.is_displayed():
+                        ActionChains(self.driver).move_to_element(el).pause(0.1).click(el).perform()
+                        break
+                break
+            except StaleElementReferenceException:
+                time.sleep(0.5)
+        self.action_click(self.OUT_OF_STOCK_OPTION)
+        self.press_esc()
 
 
-    def filter_sale_status_out_of_stock(self):
-        # Wait until at least 1 status dropdown exists
-        self.wait.until(EC.presence_of_all_elements_located(self.STATUS_BUTTON))
 
-        elements = self.find_elements(*self.STATUS_BUTTON)
+    def get_first_10_statuses(self):
+        # Wait until at least 10 cards are present
+        self.wait.until(
+            lambda d: len(
+                d.find_elements(*self.PRODUCT_STATUSES)
+            ) >= 10
+        )
 
-        # Prefer the first *displayed* element instead of hardcoding index 1
-        status_el = None
-        for el in elements:
-            if el.is_displayed() and el.is_enabled():
-                status_el = el
+        elements = self.driver.find_elements(*self.PRODUCT_STATUSES)[:10]
+
+        print(f"Checking first {len(elements)} statuses")
+
+        return [el.text for el in elements]
+
+    def verify_first_10_are_out_of_stock(self):
+
+        self.wait.until(
+            lambda d: len(
+                d.find_elements(*self.PRODUCT_STATUSES)
+            ) >= 10
+        )
+
+        statuses = self.driver.find_elements(*self.PRODUCT_STATUSES)[:10]
+
+        print(f"Verifying first {len(statuses)} results")
+
+        for status in statuses:
+            print(f"Status text: {status.text}")
+            assert "Out of Stock" in status.text
+
+
+
+
+    def scroll_to_bottom(self):
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+
+        while True:
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            self.wait.until(lambda d: True)  # small pause via implicit wait
+
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+
+            if new_height == last_height:
                 break
 
-        if status_el is None:
-            raise AssertionError("Found status dropdown elements, but none were clickable/displayed.")
+            last_height = new_height
 
-        # Click status dropdown (use JS fallback if normal click is flaky)
-        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", status_el)
-        try:
-            status_el.click()
-        except Exception:
-            self.driver.execute_script("arguments[0].click();", status_el)
-
-        # Now wait for Out of Stock option and click it
-        self.wait.until(EC.element_to_be_clickable(self.OUT_OF_STOCK_OPTION))
-        self.safe_click(self.OUT_OF_STOCK_OPTION)
+    def find_present(self, locator):
+        return self.wait.until(EC.presence_of_element_located(locator))
