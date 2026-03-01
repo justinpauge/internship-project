@@ -27,6 +27,31 @@ def browser_init(context):
             command_executor='https://hub-cloud.browserstack.com/wd/hub',
             options=options,
         )
+    elif browser == 'browserstack_mobile':
+        options = ChromeOptions()
+        options.set_capability('bstack:options', {
+            'osVersion': '17',
+            'deviceName': 'iPhone 15',
+            'userName': 'justinpauge_qhkxd8',
+            'accessKey': 'x6TYFphAbqbRTifYNPqr',
+            'sessionName': 'Out of Stock Mobile Test',
+        })
+        context.driver = webdriver.Remote(
+            command_executor='https://hub-cloud.browserstack.com/wd/hub',
+            options=options,
+        )
+    elif browser == 'mobile':
+        mobile_emulation = {
+            "deviceName": "iPhone 12 Pro"
+        }
+        options = ChromeOptions()
+        options.add_experimental_option("mobileEmulation", mobile_emulation)
+        if headless:
+            options.add_argument('--headless')
+        context.driver = webdriver.Chrome(
+            service=ChromeService(ChromeDriverManager().install()),
+            options=options
+        )
     elif browser == 'firefox':
         options = FirefoxOptions()
         if headless:
@@ -47,7 +72,8 @@ def browser_init(context):
             options=options
         )
 
-    context.driver.maximize_window()
+    if browser not in ('mobile', 'browserstack_mobile'):
+        context.driver.maximize_window()
     context.driver.implicitly_wait(4)
     context.driver.wait = WebDriverWait(context.driver, 10)
     context.app = Application(context.driver)
@@ -66,12 +92,14 @@ def after_step(context, step):
     if step.status == 'failed':
         print('\nStep failed:', step.name)
         context.driver.save_screenshot(f"failed_{step.name}.png")
-        print("Step failed. Pausing browser for inspection...")
-        input("Press Enter to close browser...")
+        browser = context.config.userdata.get('browser', 'chrome').lower()
+        if browser not in ('browserstack', 'browserstack_mobile'):
+            print("Step failed. Pausing browser for inspection...")
+            input("Press Enter to close browser...")
 
 def after_scenario(context, scenario):
     browser = context.config.userdata.get('browser', 'chrome').lower()
-    if browser == 'browserstack':
+    if browser in ('browserstack', 'browserstack_mobile'):
         if scenario.status == 'passed':
             context.driver.execute_script(
                 'browserstack_executor: {"action": "setSessionStatus", "arguments": {"status": "passed", "reason": "All steps passed"}}'

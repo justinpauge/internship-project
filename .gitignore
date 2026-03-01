@@ -92,3 +92,12 @@ app_binaries/
 
 # Screenshots
 *.png
+
+# Allure reports (generated)
+allure-results/
+allure-report/
+
+# Helper scripts
+*.bat
+*.ps1
+mobile_results.txt
