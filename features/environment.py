@@ -13,7 +13,21 @@ def browser_init(context):
     browser = context.config.userdata.get('browser', 'chrome').lower()
     headless = context.config.userdata.get('headless', 'false').lower() == 'true'
 
-    if browser == 'firefox':
+    if browser == 'browserstack':
+        options = ChromeOptions()
+        options.set_capability('bstack:options', {
+            'os': 'OS X',
+            'osVersion': 'Sonoma',
+            'browserVersion': 'latest',
+            'userName': 'justinpauge_qhkxd8',
+            'accessKey': 'x6TYFphAbqbRTifYNPqr',
+            'sessionName': 'Out of Stock Filter Test',
+        })
+        context.driver = webdriver.Remote(
+            command_executor='https://hub-cloud.browserstack.com/wd/hub',
+            options=options,
+        )
+    elif browser == 'firefox':
         options = FirefoxOptions()
         if headless:
             options.add_argument('--headless')
@@ -56,4 +70,14 @@ def after_step(context, step):
         input("Press Enter to close browser...")
 
 def after_scenario(context, scenario):
+    browser = context.config.userdata.get('browser', 'chrome').lower()
+    if browser == 'browserstack':
+        if scenario.status == 'passed':
+            context.driver.execute_script(
+                'browserstack_executor: {"action": "setSessionStatus", "arguments": {"status": "passed", "reason": "All steps passed"}}'
+            )
+        else:
+            context.driver.execute_script(
+                'browserstack_executor: {"action": "setSessionStatus", "arguments": {"status": "failed", "reason": "Test failed"}}'
+            )
     context.driver.quit()
